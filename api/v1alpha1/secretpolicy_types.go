@@ -32,7 +32,7 @@ type SecretPolicySpec struct {
 
 	// foo is an example field of SecretPolicy. Edit secretpolicy_types.go to remove/update
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	// Foo *string `json:"foo,omitempty"`
 
 	AllowedTypes   []string `json:"allowedTypes,omitempty"`
 	DisallowedKeys []string `json:"disallowedKeys,omitempty"`
