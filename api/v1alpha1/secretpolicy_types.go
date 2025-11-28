@@ -32,7 +32,7 @@ type SecretPolicySpec struct {
 
 	// foo is an example field of SecretPolicy. Edit secretpolicy_types.go to remove/update
 	// +optional
-	// Foo *string `json:"foo,omitempty"`
+	Foo *string `json:"foo,omitempty"`
 
 	AllowedTypes   []string `json:"allowedTypes,omitempty"`
 	DisallowedKeys []string `json:"disallowedKeys,omitempty"`
@@ -41,6 +41,26 @@ type SecretPolicySpec struct {
 	Rotation    RotationSpec    `json:"rotation,omitempty"`
 	AccessRules AccessRulesSpec `json:"accessRules,omitempty"`
 	Alerting    AlertingSpec    `json:"alerting,omitempty"`
+}
+
+type EncryptionSpec struct {
+	EnforceBase64 bool `json:"enforceBase64,omitempty"`
+	ExternalKMS   bool `json:"externalKMS,omitempty"`
+}
+
+type RotationSpec struct {
+	EnableAutoRotation bool `json:"enableAutoRotation,omitempty"`
+	RotationInterval   int  `json:"rotationInterval,omitempty"` // in days
+}
+
+type AccessRulesSpec struct {
+	AllowedNamespaces      []string `json:"allowedNamespaces,omitempty"`
+	AllowedServiceAccounts []string `json:"allowedServiceAccounts,omitempty"`
+}
+
+type AlertingSpec struct {
+	EnableAlerts bool   `json:"enableAlerts,omitempty"`
+	Method       string `json:"method,omitempty"` // e.g., "email", "slack"
 }
 
 // SecretPolicyStatus defines the observed state of SecretPolicy.
