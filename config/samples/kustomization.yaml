@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- compliance_v1alpha1_secretpolicy.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
