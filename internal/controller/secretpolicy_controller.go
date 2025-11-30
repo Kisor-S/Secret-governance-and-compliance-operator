@@ -22,7 +22,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	corev1 "k8s.io/api/core/v1"
 
 	compliancev1alpha1 "github.com/Kisor-S/secret-policy-operator/api/v1alpha1"
 )
@@ -58,6 +61,9 @@ func (r *SecretPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 func (r *SecretPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&compliancev1alpha1.SecretPolicy{}).
-		Named("secretpolicy").
+		Watches(
+			&corev1.Secret{},
+			&handler.EnqueueRequestForObject{},
+		).
 		Complete(r)
 }
