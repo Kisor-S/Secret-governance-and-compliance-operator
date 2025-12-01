@@ -79,10 +79,6 @@ type SecretPolicyStatus struct {
 	// - "Progressing": the resource is being created or updated
 	// - "Degraded": the resource failed to reach or maintain its desired state
 	//
-	// The status of each condition is one of True, False, or Unknown.
-	// +listType=map
-	// +listMapKey=type
-	// +optional
 
 	// Number of secrets evaluated by this policy
 	EnforcedSecrets int `json:"enforcedSecrets,omitempty"`
@@ -95,6 +91,11 @@ type SecretPolicyStatus struct {
 
 	// Per-secret violation summary
 	SecretViolations []SecretViolationStatus `json:"secretViolations,omitempty"`
+
+	// The status of each condition is one of True, False, or Unknown.
+	// +listType=map
+	// +listMapKey=type
+	// +optional
 
 	// Standard Kubernetes status conditions
 	Conditions []metav1.Condition `json:"conditions,omitempty"`

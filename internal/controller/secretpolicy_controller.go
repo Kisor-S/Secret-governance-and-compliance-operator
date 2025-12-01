@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	compliancev1alpha1 "github.com/Kisor-S/secret-policy-operator/api/v1alpha1"
 )
@@ -104,33 +105,71 @@ func (r *SecretPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *SecretPolicyReconciler) reconcileSecretPolicy(ctx context.Context, policy *compliancev1alpha1.SecretPolicy) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	// List all secrets in the cluster
+	// Fetch all Secrets
 	var secrets corev1.SecretList
 	if err := r.List(ctx, &secrets); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	violations := 0
+	totalViolations := 0
+	var violationSummary []compliancev1alpha1.SecretViolationStatus
 
 	for _, s := range secrets.Items {
 		errs := r.checkSecretAgainstPolicy(&s, policy)
 		if len(errs) > 0 {
-			violations += len(errs)
+			totalViolations += len(errs)
+
+			// Convert errors to string list
+			var msgs []string
+			for _, e := range errs {
+				msgs = append(msgs, e.Error())
+			}
+
+			violationSummary = append(violationSummary, compliancev1alpha1.SecretViolationStatus{
+				Name:       s.Name,
+				Namespace:  s.Namespace,
+				Violations: msgs,
+			})
+
+			// Emit Kubernetes Events
 			r.emitViolationEvents(policy, &s, errs)
 		}
 	}
 
-	// Update status
+	// Update status fields
+	now := metav1.Now()
+	policy.Status.LastScanTime = &now
 	policy.Status.EnforcedSecrets = len(secrets.Items)
-	policy.Status.Violations = violations
+	policy.Status.Violations = totalViolations
+	policy.Status.SecretViolations = violationSummary
 
-	if err := r.Status().Update(ctx, policy); err != nil {
-		log.Error(err, "Failed updating SecretPolicy status")
+	// Update Conditions
+	if totalViolations > 0 {
+		policy.Status.SetCondition(metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "PolicyViolations",
+			Message: fmt.Sprintf("%d violations detected", totalViolations),
+		})
+	} else {
+		policy.Status.SetCondition(metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionTrue,
+			Reason:  "PolicyClean",
+			Message: "No violations found",
+		})
 	}
 
-	// Schedule rotation checks
-	if policy.Spec.Rotation.Enabled {
-		return ctrl.Result{RequeueAfter: time.Duration(policy.Spec.Rotation.IntervalDays) * 24 * time.Hour}, nil
+	// Persist status updates
+	if err := r.Status().Update(ctx, policy); err != nil {
+		log.Error(err, "Failed to update policy status")
+	}
+
+	// Requeue after rotation interval (if enabled)
+	if policy.Spec.Rotation.Enabled && policy.Spec.Rotation.IntervalDays > 0 {
+		return ctrl.Result{
+			RequeueAfter: time.Duration(policy.Spec.Rotation.IntervalDays) * 24 * time.Hour,
+		}, nil
 	}
 
 	return ctrl.Result{}, nil
