@@ -83,13 +83,69 @@ type SecretPolicyStatus struct {
 	// +listType=map
 	// +listMapKey=type
 	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// Number of secrets evaluated by this policy
 	EnforcedSecrets int `json:"enforcedSecrets,omitempty"`
 
 	// Number of violations detected during last reconciliation
 	Violations int `json:"violations,omitempty"`
+
+	// Timestamp of last successful reconciliation
+	LastScanTime *metav1.Time `json:"lastScanTime,omitempty"`
+
+	// Per-secret violation summary
+	SecretViolations []SecretViolationStatus `json:"secretViolations,omitempty"`
+
+	// Standard Kubernetes status conditions
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// SecretViolationStatus holds the violation report for each secret.
+type SecretViolationStatus struct {
+	Name       string   `json:"name"`
+	Namespace  string   `json:"namespace"`
+	Violations []string `json:"violations"`
+}
+
+func (s *SecretPolicyStatus) SetCondition(cond metav1.Condition) {
+	now := metav1.Now()
+
+	cond.LastTransitionTime = now
+
+	// cond.ObservedGeneration = policy.Generation (to be set later)
+
+	for i, existing := range s.Conditions {
+		if existing.Type == cond.Type {
+			// Only update LastTransitionTime if the status actually changes
+			if existing.Status != cond.Status {
+				cond.LastTransitionTime = now
+			} else {
+				cond.LastTransitionTime = existing.LastTransitionTime
+			}
+			s.Conditions[i] = cond
+			return
+		}
+	}
+
+	s.Conditions = append(s.Conditions, cond)
+}
+
+func (s *SecretPolicyStatus) MarkReady() {
+	s.SetCondition(metav1.Condition{
+		Type:    "Ready",
+		Status:  metav1.ConditionTrue,
+		Reason:  "PolicyValid",
+		Message: "SecretPolicy is valid and enforcing",
+	})
+}
+
+func (s *SecretPolicyStatus) MarkNotReady(msg string) {
+	s.SetCondition(metav1.Condition{
+		Type:    "Ready",
+		Status:  metav1.ConditionFalse,
+		Reason:  "PolicyViolation",
+		Message: msg,
+	})
 }
 
 // +kubebuilder:object:root=true
