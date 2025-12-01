@@ -49,8 +49,8 @@ type EncryptionSpec struct {
 }
 
 type RotationSpec struct {
-	EnableAutoRotation bool `json:"enableAutoRotation,omitempty"`
-	RotationInterval   int  `json:"rotationInterval,omitempty"` // in days
+	Enabled      bool `json:"enabled,omitempty"`
+	IntervalDays int  `json:"intervalDays,omitempty"` // in days
 }
 
 type AccessRulesSpec struct {
@@ -84,6 +84,12 @@ type SecretPolicyStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Number of secrets evaluated by this policy
+	EnforcedSecrets int `json:"enforcedSecrets,omitempty"`
+
+	// Number of violations detected during last reconciliation
+	Violations int `json:"violations,omitempty"`
 }
 
 // +kubebuilder:object:root=true
