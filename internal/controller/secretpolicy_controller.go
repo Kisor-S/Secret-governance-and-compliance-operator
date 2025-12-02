@@ -84,19 +84,19 @@ func (r *SecretPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // Reconcile logic that handles both SecretPolicy and Secret resources
 func (r *SecretPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// First: Try to fetch SecretPolicy
 	var policy compliancev1alpha1.SecretPolicy
 	if err := r.Get(ctx, req.NamespacedName, &policy); err == nil {
-		log.Info("Reconciling SecretPolicy", "policy", req.NamespacedName)
+		logger.Info("Reconciling SecretPolicy", "policy", req.NamespacedName)
 		return r.reconcileSecretPolicy(ctx, &policy)
 	}
 
 	// Second: Try to fetch Secret
 	var secret corev1.Secret
 	if err := r.Get(ctx, req.NamespacedName, &secret); err == nil {
-		log.Info("Reconciling Secret", "secret", req.NamespacedName)
+		logger.Info("Reconciling Secret", "secret", req.NamespacedName)
 		return r.reconcileSecret(ctx, &secret)
 	}
 
@@ -106,13 +106,13 @@ func (r *SecretPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 // 1. Reconcile SecretPolicy (policy-scoped scan of ALL secrets)
 func (r *SecretPolicyReconciler) reconcileSecretPolicy(ctx context.Context, policy *compliancev1alpha1.SecretPolicy) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	//  Handle deletion + finalizer
 	if !policy.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Resource is being deleted
 		if controllerutil.ContainsFinalizer(policy, SecretPolicyFinalizer) {
-			log.Info("Running finalizer: cleaning up policy side-effects")
+			logger.Info("Running finalizer: cleaning up policy side-effects")
 
 			// Perform cleanup
 			if err := r.cleanupPolicyEffects(ctx, policy); err != nil {
@@ -125,14 +125,14 @@ func (r *SecretPolicyReconciler) reconcileSecretPolicy(ctx context.Context, poli
 				return ctrl.Result{}, err
 			}
 
-			log.Info("Finalizer completed and removed")
+			logger.Info("Finalizer completed and removed")
 		}
 		return ctrl.Result{}, nil
 	}
 
 	//  Ensure finalizer exists (on create)
 	if !controllerutil.ContainsFinalizer(policy, SecretPolicyFinalizer) {
-		log.Info("Adding finalizer to SecretPolicy")
+		logger.Info("Adding finalizer to SecretPolicy")
 		controllerutil.AddFinalizer(policy, SecretPolicyFinalizer)
 		if err := r.Update(ctx, policy); err != nil {
 			return ctrl.Result{}, err
@@ -196,7 +196,7 @@ func (r *SecretPolicyReconciler) reconcileSecretPolicy(ctx context.Context, poli
 
 	// Persist status updates
 	if err := r.Status().Update(ctx, policy); err != nil {
-		log.Error(err, "Failed to update policy status")
+		logger.Error(err, "Failed to update policy status")
 	}
 
 	// Requeue after rotation interval (if enabled)
@@ -312,7 +312,7 @@ func isRotationExpired(secret *corev1.Secret, interval int) bool {
 }
 
 func (r *SecretPolicyReconciler) cleanupPolicyEffects(ctx context.Context, policy *compliancev1alpha1.SecretPolicy) error {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	// List all Secrets
 	var secrets corev1.SecretList
@@ -332,7 +332,7 @@ func (r *SecretPolicyReconciler) cleanupPolicyEffects(ctx context.Context, polic
 		}
 
 		if changed {
-			log.Info("Cleaning up secret annotation from finalizer", "secret", s.Name)
+			logger.Info("Cleaning up secret annotation from finalizer", "secret", s.Name)
 			if err := r.Update(ctx, &s); err != nil {
 				return err
 			}
