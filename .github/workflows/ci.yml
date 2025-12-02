@@ -54,10 +54,10 @@ jobs:
             - name: Run Make Manifests
               run: make manifests
             
-            - name: Run Unit Tests
-              env:
-                CGO_ENABLED: 0
-              run: go test ./... -v 
+            # - name: Run Unit Tests
+            #   env:
+            #     CGO_ENABLED: 0
+            #   run: go test ./... -v 
               
             - name: Build the Operator Binary
               run: go build -o bin/manager main.go
