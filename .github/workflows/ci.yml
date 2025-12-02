@@ -104,5 +104,5 @@ jobs:
                 file: Dockerfile
                 push: true
                 tags: |
-                    ghcr.io/${{ github.repository_owner }}/secret-policy-operator:${{ steps.version.outputs.version }}
-                    ghcr.io/${{ github.repository_owner }}/secret-policy-operator:latest
+                    ghcr.io/${{ steps.repo_owner.outputs.owner }}/secret-policy-operator:${{ steps.version.outputs.version }}
+                    ghcr.io/${{ steps.repo_owner.outputs.owner }}/secret-policy-operator:latest
