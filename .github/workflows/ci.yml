@@ -93,6 +93,10 @@ jobs:
                     echo "version=latest" >> $GITHUB_OUTPUT
                 fi
 
+            - name: Lowercase repo owner
+              id: repo_owner
+              run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_OUTPUT
+
             - name: Build and Push Docker Image
               uses: docker/build-push-action@v6
               with:
