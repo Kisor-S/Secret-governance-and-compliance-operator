@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -41,6 +42,8 @@ type SecretPolicyReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 }
+
+const SecretPolicyFinalizer = "finalizer.secretpolicy.compliance.security.local"
 
 // +kubebuilder:rbac:groups=compliance.security.local,resources=secretpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=compliance.security.local,resources=secretpolicies/status,verbs=get;update;patch
@@ -62,6 +65,22 @@ type SecretPolicyReconciler struct {
 
 // 	return ctrl.Result{}, nil
 // }
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *SecretPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Initialize Kubernetes event recorder (client-go style)
+	r.Recorder = mgr.GetEventRecorderFor("secretpolicy-controller")
+
+	// Register controller with the manager
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&compliancev1alpha1.SecretPolicy{}). // primary resource
+		Watches(
+			&corev1.Secret{},                   // secondary resource
+			&handler.EnqueueRequestForObject{}, // enqueue Secret events
+		).
+		Named("secretpolicy"). // controller name
+		Complete(r)            // finalize
+}
 
 // Reconcile logic that handles both SecretPolicy and Secret resources
 func (r *SecretPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -85,25 +104,40 @@ func (r *SecretPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *SecretPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Initialize Kubernetes event recorder (client-go style)
-	r.Recorder = mgr.GetEventRecorderFor("secretpolicy-controller")
-
-	// Register controller with the manager
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&compliancev1alpha1.SecretPolicy{}). // primary resource
-		Watches(
-			&corev1.Secret{},                   // secondary resource
-			&handler.EnqueueRequestForObject{}, // enqueue Secret events
-		).
-		Named("secretpolicy"). // controller name
-		Complete(r)            // finalize
-}
-
 // 1. Reconcile SecretPolicy (policy-scoped scan of ALL secrets)
 func (r *SecretPolicyReconciler) reconcileSecretPolicy(ctx context.Context, policy *compliancev1alpha1.SecretPolicy) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
+
+	//  Handle deletion + finalizer
+	if !policy.ObjectMeta.DeletionTimestamp.IsZero() {
+		// Resource is being deleted
+		if controllerutil.ContainsFinalizer(policy, SecretPolicyFinalizer) {
+			log.Info("Running finalizer: cleaning up policy side-effects")
+
+			// Perform cleanup
+			if err := r.cleanupPolicyEffects(ctx, policy); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			// Remove finalizer
+			controllerutil.RemoveFinalizer(policy, SecretPolicyFinalizer)
+			if err := r.Update(ctx, policy); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			log.Info("Finalizer completed and removed")
+		}
+		return ctrl.Result{}, nil
+	}
+
+	//  Ensure finalizer exists (on create)
+	if !controllerutil.ContainsFinalizer(policy, SecretPolicyFinalizer) {
+		log.Info("Adding finalizer to SecretPolicy")
+		controllerutil.AddFinalizer(policy, SecretPolicyFinalizer)
+		if err := r.Update(ctx, policy); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	// Fetch all Secrets
 	var secrets corev1.SecretList
@@ -275,6 +309,56 @@ func isRotationExpired(secret *corev1.Secret, interval int) bool {
 		return true
 	}
 	return time.Since(t).Hours() > float64(interval*24)
+}
+
+func (r *SecretPolicyReconciler) cleanupPolicyEffects(ctx context.Context, policy *compliancev1alpha1.SecretPolicy) error {
+	log := log.FromContext(ctx)
+
+	// List all Secrets
+	var secrets corev1.SecretList
+	if err := r.List(ctx, &secrets); err != nil {
+		return err
+	}
+
+	for _, s := range secrets.Items {
+		// Remove rotation tracking annotation if present
+		changed := false
+
+		if s.Annotations != nil {
+			if _, exists := s.Annotations["lastRotated"]; exists {
+				delete(s.Annotations, "lastRotated")
+				changed = true
+			}
+		}
+
+		if changed {
+			log.Info("Cleaning up secret annotation from finalizer", "secret", s.Name)
+			if err := r.Update(ctx, &s); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Clear status fields
+	policy.Status.EnforcedSecrets = 0
+	policy.Status.Violations = 0
+	policy.Status.SecretViolations = nil
+	policy.Status.LastScanTime = nil
+	policy.Status.MarkReady()
+
+	if err := r.Status().Update(ctx, policy); err != nil {
+		return err
+	}
+
+	// Emit final event
+	r.Recorder.Eventf(
+		policy,
+		corev1.EventTypeNormal,
+		"PolicyFinalizerComplete",
+		"Cleanup completed for SecretPolicy %s", policy.Name,
+	)
+
+	return nil
 }
 
 // Violation Event Emitter
