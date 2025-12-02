@@ -60,7 +60,7 @@ jobs:
             #   run: go test ./... -v 
               
             - name: Build the Operator Binary
-              run: go build -o bin/manager main.go
+              run: go build -o bin/manager ./cmd/...
 
     docker-build:
         
