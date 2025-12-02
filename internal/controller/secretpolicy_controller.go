@@ -109,7 +109,7 @@ func (r *SecretPolicyReconciler) reconcileSecretPolicy(ctx context.Context, poli
 	logger := log.FromContext(ctx)
 
 	//  Handle deletion + finalizer
-	if !policy.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !policy.DeletionTimestamp.IsZero() {
 		// Resource is being deleted
 		if controllerutil.ContainsFinalizer(policy, SecretPolicyFinalizer) {
 			logger.Info("Running finalizer: cleaning up policy side-effects")
