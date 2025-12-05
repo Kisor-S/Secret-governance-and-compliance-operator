@@ -29,6 +29,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	compliancev1alpha1 "github.com/Kisor-S/secret-policy-operator/api/v1alpha1"
+	internalpolicy "github.com/Kisor-S/secret-policy-operator/internal/policy"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // nolint:unused
