@@ -189,7 +189,7 @@ func main() {
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 
-		secretValidator := &webhook.SecretValidator{
+		secretValidator := &webhookv1alpha1.SecretPolicyCustomValidator{
 			Client: mgr.GetClient(),
 		}
 		secretValidator.SetupWebhookWithManager(mgr)

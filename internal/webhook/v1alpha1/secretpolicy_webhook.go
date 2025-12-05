@@ -59,22 +59,22 @@ type SecretPolicyCustomValidator struct {
 	// TODO(user): Add more fields as needed for validation
 
 	Client  client.Client
-	Decoder *admission.Decoder
+	Decoder admission.Decoder
 }
 
-func (v *SecretValidator) InjectDecoder(decoder *admission.Decoder) error {
+func (v *SecretPolicyCustomValidator) InjectDecoder(decoder admission.Decoder) error {
 	v.Decoder = decoder
 	return nil
 }
 
-func (v *SecretValidator) SetupWebhookWithManager(mgr ctrl.Manager) {
+func (v *SecretPolicyCustomValidator) SetupWebhookWithManager(mgr ctrl.Manager) {
 	mgr.GetWebhookServer().Register(
 		"/validate-v1-secret",
 		&admission.Webhook{Handler: v},
 	)
 }
 
-func (v *SecretValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (v *SecretPolicyCustomValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	secret := &corev1.Secret{}
 	err := v.Decoder.Decode(req, secret)
 	if err != nil {
