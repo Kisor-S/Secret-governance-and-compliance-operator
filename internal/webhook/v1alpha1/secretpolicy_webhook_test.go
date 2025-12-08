@@ -28,13 +28,13 @@ var _ = Describe("SecretPolicy Webhook", func() {
 	var (
 		obj       *compliancev1alpha1.SecretPolicy
 		oldObj    *compliancev1alpha1.SecretPolicy
-		validator SecretPolicyCustomValidator
+		validator SecretPolicyValidator
 	)
 
 	BeforeEach(func() {
 		obj = &compliancev1alpha1.SecretPolicy{}
 		oldObj = &compliancev1alpha1.SecretPolicy{}
-		validator = SecretPolicyCustomValidator{}
+		validator = SecretPolicyValidator{}
 		Expect(validator).NotTo(BeNil(), "Expected validator to be initialized")
 		Expect(oldObj).NotTo(BeNil(), "Expected oldObj to be initialized")
 		Expect(obj).NotTo(BeNil(), "Expected obj to be initialized")

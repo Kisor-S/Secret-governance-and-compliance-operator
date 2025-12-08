@@ -120,7 +120,7 @@ replacements:
  - source: # Uncomment the following block if you have any webhook
      kind: Service
      version: v1
-     name: webhook-service
+     name: secret-policy-operator-webhook-service
      fieldPath: .metadata.name # Name of the service
    targets:
      - select:
@@ -138,7 +138,7 @@ replacements:
  - source:
      kind: Service
      version: v1
-     name: webhook-service
+     name: secret-policy-operator-webhook-service
      fieldPath: .metadata.namespace # Namespace of the service
    targets:
      - select:

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,13 +38,6 @@ import (
 // log is for logging in this package.
 var secretpolicylog = logf.Log.WithName("secretpolicy-resource")
 
-// SetupSecretPolicyWebhookWithManager registers the webhook for SecretPolicy in the manager.
-func SetupSecretPolicyWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&compliancev1alpha1.SecretPolicy{}).
-		WithValidator(&SecretPolicyCustomValidator{}).
-		Complete()
-}
-
 // TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
@@ -55,37 +49,131 @@ func SetupSecretPolicyWebhookWithManager(mgr ctrl.Manager) error {
 //
 // NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
 // as this struct is used only for temporary operations and does not need to be deeply copied.
-type SecretPolicyCustomValidator struct {
-	// TODO(user): Add more fields as needed for validation
 
+// -----------------------------------------------------------------------------
+// SecretPolicyValidator – validates CRD objects (SecretPolicy)
+// -----------------------------------------------------------------------------
+
+type SecretPolicyValidator struct {
+	Client client.Client
+}
+
+func (v *SecretPolicyValidator) InjectClient(c client.Client) error {
+	v.Client = c
+	return nil
+}
+
+var _ webhook.CustomValidator = &SecretPolicyValidator{}
+
+// SetupSecretPolicyWebhookWithManager registers the webhook for SecretPolicy in the manager.
+func SetupSecretPolicyWebhookWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewWebhookManagedBy(mgr).
+		For(&compliancev1alpha1.SecretPolicy{}).
+		WithValidator(&SecretPolicyValidator{}).
+		Complete()
+}
+
+// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type SecretPolicy.
+func (v *SecretPolicyValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	secretpolicy, ok := obj.(*compliancev1alpha1.SecretPolicy)
+	if !ok {
+		return nil, fmt.Errorf("expected a SecretPolicy object but got %T", obj)
+	}
+	secretpolicylog.Info("Validation for SecretPolicy upon creation", "name", secretpolicy.GetName())
+
+	// TODO(user): fill in your validation logic upon object creation.
+
+	return nil, nil
+}
+
+// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type SecretPolicy.
+func (v *SecretPolicyValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+	secretpolicy, ok := newObj.(*compliancev1alpha1.SecretPolicy)
+	if !ok {
+		return nil, fmt.Errorf("expected a SecretPolicy object for the newObj but got %T", newObj)
+	}
+	secretpolicylog.Info("Validation for SecretPolicy upon update", "name", secretpolicy.GetName())
+
+	// TODO(user): fill in your validation logic upon object update.
+
+	return nil, nil
+}
+
+// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type SecretPolicy.
+func (v *SecretPolicyValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+	secretpolicy, ok := obj.(*compliancev1alpha1.SecretPolicy)
+	if !ok {
+		return nil, fmt.Errorf("expected a SecretPolicy object but got %T", obj)
+	}
+	secretpolicylog.Info("Validation for SecretPolicy upon deletion", "name", secretpolicy.GetName())
+
+	// TODO(user): fill in your validation logic upon object deletion.
+
+	return nil, nil
+}
+
+// -----------------------------------------------------------------------------
+// SecretValidator – admission webhook for corev1.Secrets
+// -----------------------------------------------------------------------------
+
+// +kubebuilder:webhook:path=/validate-v1-secret,mutating=false,failurePolicy=fail,sideEffects=None,groups="",resources=secrets,verbs=create;update,versions=v1,name=secret.validator.kishore.dev,admissionReviewVersions=v1
+
+type SecretValidator struct {
 	Client  client.Client
 	Decoder admission.Decoder
 }
 
-func (v *SecretPolicyCustomValidator) InjectDecoder(decoder admission.Decoder) error {
+var _ admission.Handler = &SecretValidator{}
+
+// var _ admission.DecoderInjector = &SecretValidator{}
+// var _ client.Injector = &SecretValidator{}
+
+// Note: compile-time assertions for admission.DecoderInjector and client.Injector
+// were removed because the controller-runtime version in use does not
+// export those exact interface names. These assertions are optional
+// static checks — the webhook still works at runtime as long as the
+// InjectClient/InjectDecoder methods are present on the type.
+
+func (v *SecretValidator) InjectClient(c client.Client) error {
+	v.Client = c
+	return nil
+}
+
+func (v *SecretValidator) InjectDecoder(decoder admission.Decoder) error {
 	v.Decoder = decoder
 	return nil
 }
 
-func (v *SecretPolicyCustomValidator) SetupWebhookWithManager(mgr ctrl.Manager) {
-	mgr.GetWebhookServer().Register(
-		"/validate-v1-secret",
-		&admission.Webhook{Handler: v},
-	)
+// Register webhook with the manager
+// func (v *SecretValidator) SetupWebhookWithManager(mgr ctrl.Manager) {
+// 	mgr.GetWebhookServer().Register("/validate-v1-secret", &admission.Webhook{Handler: v})
+// }
+
+func SetupSecretWebhookWithManager(mgr ctrl.Manager) error {
+	validator := &SecretValidator{}
+	validator.InjectClient(mgr.GetClient())
+
+	dec := admission.NewDecoder(mgr.GetScheme())
+	validator.InjectDecoder(dec)
+
+	mgr.GetWebhookServer().Register("/validate-v1-secret",
+		&admission.Webhook{Handler: validator})
+	return nil
 }
 
-func (v *SecretPolicyCustomValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (v *SecretValidator) Handle(ctx context.Context, req admission.Request) admission.Response {
 	secret := &corev1.Secret{}
-	err := v.Decoder.Decode(req, secret)
-	if err != nil {
+	if err := v.Decoder.Decode(req, secret); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	// Skip system namespaces
-	if secret.Namespace == "kube-system" ||
+	// Skip system namespaces + empty
+	if secret.Namespace == "" ||
+		secret.Namespace == "kube-system" ||
 		secret.Namespace == "cert-manager" ||
 		secret.Namespace == "secret-policy-operator-system" {
-		return admission.Allowed("system namespace – skipping validation")
+
+		return admission.Allowed("skipping validation for system namespace")
 	}
 
 	// List policies
@@ -104,58 +192,10 @@ func (v *SecretPolicyCustomValidator) Handle(ctx context.Context, req admission.
 	}
 
 	if len(violations) > 0 {
-		return admission.Denied("Secret violates policy:\n - " +
-			joinErrors(violations))
+		return admission.Denied(
+			"Secret violates policy:\n - " + strings.Join(violations, "\n - "),
+		)
 	}
 
 	return admission.Allowed("valid secret")
-}
-
-func joinErrors(errs []string) string {
-	out := ""
-	for _, e := range errs {
-		out += e + "\n - "
-	}
-	return out
-}
-
-var _ webhook.CustomValidator = &SecretPolicyCustomValidator{}
-
-// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type SecretPolicy.
-func (v *SecretPolicyCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	secretpolicy, ok := obj.(*compliancev1alpha1.SecretPolicy)
-	if !ok {
-		return nil, fmt.Errorf("expected a SecretPolicy object but got %T", obj)
-	}
-	secretpolicylog.Info("Validation for SecretPolicy upon creation", "name", secretpolicy.GetName())
-
-	// TODO(user): fill in your validation logic upon object creation.
-
-	return nil, nil
-}
-
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type SecretPolicy.
-func (v *SecretPolicyCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	secretpolicy, ok := newObj.(*compliancev1alpha1.SecretPolicy)
-	if !ok {
-		return nil, fmt.Errorf("expected a SecretPolicy object for the newObj but got %T", newObj)
-	}
-	secretpolicylog.Info("Validation for SecretPolicy upon update", "name", secretpolicy.GetName())
-
-	// TODO(user): fill in your validation logic upon object update.
-
-	return nil, nil
-}
-
-// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type SecretPolicy.
-func (v *SecretPolicyCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	secretpolicy, ok := obj.(*compliancev1alpha1.SecretPolicy)
-	if !ok {
-		return nil, fmt.Errorf("expected a SecretPolicy object but got %T", obj)
-	}
-	secretpolicylog.Info("Validation for SecretPolicy upon deletion", "name", secretpolicy.GetName())
-
-	// TODO(user): fill in your validation logic upon object deletion.
-
-	return nil, nil
 }
