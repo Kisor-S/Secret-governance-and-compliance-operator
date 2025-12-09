@@ -144,11 +144,6 @@ func (v *SecretValidator) InjectDecoder(decoder admission.Decoder) error {
 	return nil
 }
 
-// Register webhook with the manager
-// func (v *SecretValidator) SetupWebhookWithManager(mgr ctrl.Manager) {
-// 	mgr.GetWebhookServer().Register("/validate-v1-secret", &admission.Webhook{Handler: v})
-// }
-
 func SetupSecretWebhookWithManager(mgr ctrl.Manager) error {
 	validator := &SecretValidator{}
 	// Inject client
