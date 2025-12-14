@@ -37,6 +37,7 @@ import (
 
 	compliancev1alpha1 "github.com/Kisor-S/secret-policy-operator/api/v1alpha1"
 	"github.com/Kisor-S/secret-policy-operator/internal/controller"
+	webhookv1alpha1 "github.com/Kisor-S/secret-policy-operator/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -103,15 +104,32 @@ func main() {
 	}
 
 	// Initial webhook TLS options
+	// webhookTLSOpts := tlsOpts
+	// webhookServerOptions := webhook.Options{
+	// 	TLSOpts: webhookTLSOpts,
+	// 	Port:    9443,
+	// }
+
+	// if len(webhookCertPath) > 0 {
+	// 	setupLog.Info("Initializing webhook certificate watcher using provided certificates",
+	// 		"webhook-cert-path", webhookCertPath, "webhook-cert-name", webhookCertName, "webhook-cert-key", webhookCertKey)
+
+	// 	webhookServerOptions.CertDir = webhookCertPath
+	// 	webhookServerOptions.CertName = webhookCertName
+	// 	webhookServerOptions.KeyName = webhookCertKey
+	// }
+
+	// webhookServer := webhook.NewServer(webhookServerOptions)
+
 	webhookTLSOpts := tlsOpts
 	webhookServerOptions := webhook.Options{
+		Host:    "",
+		Port:    9443,
+		CertDir: "/tmp/k8s-webhook-server/serving-certs",
 		TLSOpts: webhookTLSOpts,
 	}
 
 	if len(webhookCertPath) > 0 {
-		setupLog.Info("Initializing webhook certificate watcher using provided certificates",
-			"webhook-cert-path", webhookCertPath, "webhook-cert-name", webhookCertName, "webhook-cert-key", webhookCertKey)
-
 		webhookServerOptions.CertDir = webhookCertPath
 		webhookServerOptions.CertName = webhookCertName
 		webhookServerOptions.KeyName = webhookCertKey
@@ -185,6 +203,32 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SecretPolicy")
 		os.Exit(1)
 	}
+	// nolint:goconst
+
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		// CRD validator
+		if err := webhookv1alpha1.SetupSecretPolicyWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create SecretPolicy webhook")
+			os.Exit(1)
+		}
+
+		// Secret webhook
+		if err := webhookv1alpha1.SetupSecretWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create Secret webhook")
+			os.Exit(1)
+		}
+	}
+
+	// if err := webhookv1alpha1.SetupSecretPolicyWebhookWithManager(mgr); err != nil {
+	// setupLog.Error(err, "unable to create SecretPolicy webhook")
+	// os.Exit(1)
+	// }
+
+	// // Register Secret webhook via manager injection system
+	// if err := webhookv1alpha1.SetupSecretWebhookWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create Secret webhook")
+	// 	os.Exit(1)
+	// }
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

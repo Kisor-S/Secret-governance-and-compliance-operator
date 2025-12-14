@@ -1,0 +1,7 @@
+resources:
+- manifests.yaml
+- service.yaml
+- secret_validating_webhook.yaml
+
+configurations:
+- kustomizeconfig.yaml

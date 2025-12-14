@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -34,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	compliancev1alpha1 "github.com/Kisor-S/secret-policy-operator/api/v1alpha1"
+	internalpolicy "github.com/Kisor-S/secret-policy-operator/internal/policy"
 )
 
 // SecretPolicyReconciler reconciles a SecretPolicy object
@@ -48,6 +48,8 @@ const SecretPolicyFinalizer = "finalizer.secretpolicy.compliance.security.local"
 // +kubebuilder:rbac:groups=compliance.security.local,resources=secretpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=compliance.security.local,resources=secretpolicies/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=compliance.security.local,resources=secretpolicies/finalizers,verbs=update
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -149,7 +151,7 @@ func (r *SecretPolicyReconciler) reconcileSecretPolicy(ctx context.Context, poli
 	var violationSummary []compliancev1alpha1.SecretViolationStatus
 
 	for _, s := range secrets.Items {
-		errs := r.checkSecretAgainstPolicy(&s, policy)
+		errs := internalpolicy.CheckSecretAgainstPolicy(&s, policy)
 		if len(errs) > 0 {
 			totalViolations += len(errs)
 
@@ -219,96 +221,14 @@ func (r *SecretPolicyReconciler) reconcileSecret(ctx context.Context, secret *co
 	}
 
 	for _, p := range policies.Items {
-		errs := r.checkSecretAgainstPolicy(secret, &p)
+		// errs := internalpolicy.checkSecretAgainstPolicy(secret, &p)
+		errs := internalpolicy.CheckSecretAgainstPolicy(secret, &p)
 		if len(errs) > 0 {
 			r.emitViolationEvents(&p, secret, errs)
 		}
 	}
 
 	return ctrl.Result{}, nil
-}
-
-// 3. The Policy Evaluation Engine. This function performs ALL checks on a Secret.
-func (r *SecretPolicyReconciler) checkSecretAgainstPolicy(secret *corev1.Secret, policy *compliancev1alpha1.SecretPolicy) []error {
-	var errs []error
-
-	// 1. Allowed types
-	if !isIn(secret.Type, policy.Spec.AllowedTypes) {
-		errs = append(errs, fmt.Errorf("secret type %s not allowed", secret.Type))
-	}
-
-	// 2. Disallowed keys
-	for key := range secret.Data {
-		if contains(policy.Spec.DisallowedKeys, key) {
-			errs = append(errs, fmt.Errorf("key %s is disallowed", key))
-		}
-	}
-
-	// 3. Base64 enforcement
-	if policy.Spec.Encryption.EnforceBase64 {
-		for key, val := range secret.Data {
-			if !isValidBase64(val) {
-				errs = append(errs, fmt.Errorf("key %s is not valid base64", key))
-			}
-		}
-	}
-
-	// 4. KMS enforcement
-	if policy.Spec.Encryption.ExternalKMS {
-		if secret.Annotations["kms-encrypted"] != "true" {
-			errs = append(errs, fmt.Errorf("secret is not encrypted via external KMS"))
-		}
-	}
-
-	// 5. Namespace rules
-	if !contains(policy.Spec.AccessRules.AllowedNamespaces, secret.Namespace) {
-		errs = append(errs, fmt.Errorf("namespace %s is not allowed", secret.Namespace))
-	}
-
-	// 6. Rotation rules
-	if policy.Spec.Rotation.Enabled {
-		if isRotationExpired(secret, policy.Spec.Rotation.IntervalDays) {
-			errs = append(errs, fmt.Errorf("secret rotation interval exceeded"))
-		}
-	}
-
-	return errs
-}
-
-// Helper Functions
-func isIn(value corev1.SecretType, list []string) bool {
-	for _, v := range list {
-		if string(value) == v {
-			return true
-		}
-	}
-	return false
-}
-
-func contains(list []string, v string) bool {
-	for _, item := range list {
-		if item == v {
-			return true
-		}
-	}
-	return false
-}
-
-func isValidBase64(data []byte) bool {
-	_, err := base64.StdEncoding.DecodeString(string(data))
-	return err == nil
-}
-
-func isRotationExpired(secret *corev1.Secret, interval int) bool {
-	last := secret.Annotations["lastRotated"]
-	if last == "" {
-		return true // no rotation timestamp means expired
-	}
-	t, err := time.Parse(time.RFC3339, last)
-	if err != nil {
-		return true
-	}
-	return time.Since(t).Hours() > float64(interval*24)
 }
 
 func (r *SecretPolicyReconciler) cleanupPolicyEffects(ctx context.Context, policy *compliancev1alpha1.SecretPolicy) error {
