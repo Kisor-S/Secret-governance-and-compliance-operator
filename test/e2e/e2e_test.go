@@ -83,7 +83,7 @@ var _ = Describe("Manager", Ordered, func() {
 		_, _ = utils.Run(cmd)
 
 		By("removing manager namespace")
-		cmd := exec.Command("kubectl", "delete", "ns", namespace, "--ignore-not-found")
+		cmd = exec.Command("kubectl", "delete", "ns", namespace, "--ignore-not-found")
 		_, _ = utils.Run(cmd)
 	})
 
