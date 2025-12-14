@@ -45,7 +45,9 @@ type SecretPolicySpec struct {
 
 type EncryptionSpec struct {
 	EnforceBase64 bool `json:"enforceBase64,omitempty"`
-	ExternalKMS   bool `json:"externalKMS,omitempty"`
+	// +kubebuilder:validation:Enum=strict;relaxed
+	Base64Mode  string `json:"base64Mode,omitempty"`
+	ExternalKMS bool   `json:"externalKMS,omitempty"`
 }
 
 type RotationSpec struct {
