@@ -1,5 +1,13 @@
 # Secret Governance & Compliance Operator
 
+![Go Version](https://img.shields.io/badge/Go-1.22-blue)
+[![CI](https://github.com/Kisor-S/Secret-governance-and-compliance-operator/actions/workflows/go.yml/badge.svg)](https://github.com/Kisor-S/Secret-governance-and-compliance-operator/actions/workflows/ci.yml)
+![Build Status](https://img.shields.io/github/actions/workflow/status/Kisor-S/Secret-governance-and-compliance-operator/ci.yml?label=build)
+![Docker Image](https://img.shields.io/badge/ghcr.io%2FKisor--S%2Fsecret--governance--operator-latest-blue)
+![Kubebuilder](https://img.shields.io/badge/Made%20with-Kubebuilder-4B275F)
+![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
+
+
 The **Secret Governance & Compliance Operator** is a Kubernetes operator that enforces **security and compliance policies for Secrets** across your cluster.
 
 It introduces a `SecretPolicy` custom resource and a **validating admission webhook** to ensure that every `Secret` created or updated in the cluster complies with your organization’s rules (encoding, allowed keys, namespaces, types, etc.).
@@ -461,4 +469,12 @@ If you found this useful:
 - Share it in your DevOps/Kubernetes community
 
 ---
+
+## License
+This project is licensed under the Apache 2.0 License. See the LICENSE file for details.
+
+---
+
+## Copyright
+© 2025 Kisor S. All rights reserved.
 
